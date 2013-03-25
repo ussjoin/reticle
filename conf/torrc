@@ -1,0 +1,40 @@
+DataDirectory /tmp/crypt/working/tor #Reticle: Change this if your (encrypted) location is different
+HiddenServiceDir /tmp/crypt/working/tor/hidden/ #Reticle: Change this if your (encrypted) location is different
+HiddenServicePort 34213 127.0.0.1:22
+HiddenServicePort 34214 127.0.0.1:50121
+
+PidFile /tmp/crypt/working/tor/tor.pid
+
+#(Relatively) standard Tor stuff follows. Change it only if you have a specific wish to.
+
+## Replace this with "SocksPort 0" if you plan to run Tor only as a
+## server, and not make any local application connections yourself.
+SocksPort 9050 # what port to open for local application connections
+SocksBindAddress 127.0.0.1 # accept connections only from localhost
+
+VirtualAddrNetwork 10.192.0.0/10
+AutomapHostsOnResolve 1
+TransPort 9040
+DNSPort 2053
+
+## Allow no-name routers (ones that the dirserver operators don't
+## know anything about) in only these positions in your circuits.
+## Other choices (not advised) are entry,exit,introduction.
+AllowUnverifiedNodes middle,rendezvous
+
+## Logs go to stdout at level "notice" unless redirected by something
+## else, like one of the below lines. You can have as many log lines as
+## you want.
+##
+#Log debug file /tmp/tordebug.log
+
+## Uncomment this to start the process in the background... or use
+## --runasdaemon 1 on the command line.
+RunAsDaemon 1
+# User tor
+# Group tor
+
+# User pi
+# Group pi
+
+
