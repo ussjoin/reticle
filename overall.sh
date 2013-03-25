@@ -15,7 +15,8 @@ control_c()
 {
   echo -en "\n*** Exiting ***\n"
   shutdown
-  exit $?
+  rm $PREFIX/working/overall.pid
+  exit 0
 }
 
 startup()
@@ -54,6 +55,7 @@ trap control_c SIGINT
 
 trap restart SIGUSR1
 
+echo $BASHPID > $PREFIX/working/overall.pid
 
 startup
  
