@@ -2,21 +2,32 @@
 
 PREFIX=/tmp/crypt
  
+torshutdown()
+{
+    PREFIX=$PREFIX; kill -s SIGINT `cat $PREFIX/working/tor/tor.pid`
+}
+
+torstartup()
+{
+    #-f: Use this configuration file
+    PREFIX=$PREFIX; tor -f $PREFIX/conf/torrc
+}
+ 
 shutdown()
 {
-  PREFIX=$PREFIX; kill -s SIGINT `cat $PREFIX/working/tor/tor.pid`
-  PREFIX=$PREFIX; nginx -p $PREFIX/working/nginx/ -c $PREFIX/conf/nginx.conf -s quit
-  PREFIX=$PREFIX; couchdb -d -n -a $PREFIX/conf/couchdb.ini -p $PREFIX/working/couchdb/couch.pid
-  return $?
+    torshutdown
+    PREFIX=$PREFIX; nginx -p $PREFIX/working/nginx/ -c $PREFIX/conf/nginx.conf -s quit
+    PREFIX=$PREFIX; couchdb -d -n -a $PREFIX/conf/couchdb.ini -p $PREFIX/working/couchdb/couch.pid
+    return $?
 }
  
 control_c()
 # run if user hits control-c
 {
-  echo -en "\n*** Exiting ***\n"
-  shutdown
-  rm $PREFIX/working/overall.pid
-  exit 0
+    echo -en "\n*** Exiting ***\n"
+    shutdown
+    rm $PREFIX/working/overall.pid
+    exit 0
 }
 
 startup()
@@ -40,20 +51,20 @@ startup()
     #-s: Send signal (e.g., quit)
     PREFIX=$PREFIX; nginx -p $PREFIX/working/nginx/ -c $PREFIX/conf/nginx.conf
 
-    #-f: Use this configuration file
-    PREFIX=$PREFIX; tor -f $PREFIX/conf/torrc
+    torstartup
 }
 
-restart()
+reset()
 {
-    shutdown
-    startup
+    #Only Tor needs to be reset in case of a connection interruption.
+    torshutdown
+    torstartup
 }
  
 # trap keyboard interrupt (control-c)
 trap control_c SIGINT
 
-trap restart SIGUSR1
+trap reset SIGUSR1
 
 echo $BASHPID > $PREFIX/working/overall.pid
 
