@@ -1,7 +1,7 @@
 DataDirectory /tmp/crypt/working/tor #Reticle: Change this if your (encrypted) location is different
 HiddenServiceDir /tmp/crypt/working/tor/hidden/ #Reticle: Change this if your (encrypted) location is different
 HiddenServicePort 34213 127.0.0.1:22
-HiddenServicePort 34214 127.0.0.1:50121
+HiddenServicePort 34214 127.0.0.1:40120
 
 PidFile /tmp/crypt/working/tor/tor.pid
 
