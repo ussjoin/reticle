@@ -10,6 +10,7 @@ BASEURL =  'http://localhost:50121/reticle/'
 FEEDURL = BASEURL+'_changes?feed=continuous'
 
 MISSIONID = "mission"
+CLIENTID = "client"
 
 #This is the CA's public key, used to verify missions.
 CERTPATH = File.dirname(__FILE__)+"/certs/ca.pem"
@@ -26,6 +27,16 @@ def spawn(script)
   end
   File.open(MISSIONPATH, 'w') {|f| f.write(script) }
   @runningthread = Thread.new {system("ruby "+MISSIONPATH)}
+end
+
+def client_restart(script)
+  puts "I am going to restart."
+  File.open(__FILE__, 'w') {|f| f.write(script) }
+  exec("ruby "+__FILE__)
+end
+
+def client_digest
+  Base64.encode64(OpenSSL::Digest::SHA256.new.digest(File.read __FILE__)).strip
 end
 
 def verify_mission(revision, script, signature)
@@ -45,9 +56,14 @@ def handle_change(change)
   rev = change['changes'][0]['rev']
   @since = seq
   
-  if (id == MISSIONID)
+  if (id == MISSIONID or id == CLIENTID)
     puts "#{seq}: #{id} at #{rev}"
-    uri = URI(BASEURL+MISSIONID+"?rev="+rev)
+    if (id == MISSIONID)
+      uri = URI(BASEURL+MISSIONID+"?rev="+rev)
+    else
+      uri = URI(BASEURL+CLIENTID+"?rev="+rev)
+    end
+    
     req = Net::HTTP::Get.new(uri.path)
     req["content-type"] = "application/json"
     data = nil
@@ -56,7 +72,19 @@ def handle_change(change)
       data = JSON.parse(response.body)
       if verify_mission(data['_rev'], data['script'], data['signature'])
         puts "Revision #{data['_rev']} validates."
-        spawn(data['script'])
+        if (data['_id'] == CLIENTID)
+          currdigest = client_digest()
+          newdigest = data['digest']
+          if currdigest != data['digest']
+            puts "Current digest = '#{currdigest}' new digest = '#{newdigest}'"
+            client_restart(data['script'])
+          else
+            puts "Got new client in; same as current client, so ignoring."
+          end
+        else
+          puts "Spawning script from #{data['_id']}."
+          spawn(data['script'])
+        end
       else
         puts "Bad mission came in: \n#{change}\n\n"
       end
@@ -71,7 +99,7 @@ def monitor_couch
     buffer = ""
  
     http.errback {
-      puts "Connection dropped (restarting; this is normal)"
+      puts "HAHA MOFO Connection dropped (restarting; this is normal)"
       monitor_couch 
     }
     http.callback {
@@ -82,8 +110,10 @@ def monitor_couch
       while line = buffer.slice!(/.+\r?\n/)
         begin
           handle_change JSON.parse(line)
-        rescue
-          puts "Invalid JSON: #{line}"
+        rescue Exception => e
+          puts "Caught exception when processing #{line}"
+          puts e.message  
+          puts e.backtrace.join("\n")
          end
       end
     end
@@ -92,3 +122,4 @@ def monitor_couch
 end
  
 monitor_couch
+

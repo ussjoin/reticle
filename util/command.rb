@@ -6,7 +6,9 @@ require 'base64'
 require 'net/http'
 
 PKEYPATH = File.dirname(__FILE__)+"/../certs/ca.key"
-MISSIONURI = URI("http://localhost:50121/reticle/mission")
+BASEURL = "http://localhost:50121/reticle/"
+MISSIONURI = URI(BASEURL+"mission")
+CLIENTURI = URI(BASEURL+"client")
 
 # Signature format: Revision NUMBER ONLY (i.e., 12, not 12-asfdgfhdasdjfhnf), immediately followed by script.
 # The number is for the revision the new script will be.
@@ -34,11 +36,29 @@ def pushstuff(rev, data, signature)
   end
 end
 
-def checkrevision
-  req = Net::HTTP::Get.new(MISSIONURI.path)
+def pushclient(rev, data, signature)
+  json = JSON.generate({"script" => data, "signature" => signature, "_rev" => rev,
+    "digest" => Base64.encode64(OpenSSL::Digest::SHA256.new.digest(data)).strip})
+  req = Net::HTTP::Put.new(CLIENTURI.path)
+  req["content-type"] = "application/json"
+  req.body = json
+  Net::HTTP.start(CLIENTURI.host, CLIENTURI.port) do |http|
+    response = http.request req # Net::HTTPResponse object
+    puts response.body
+  end
+end
+
+def checkrevision(isclient)
+  
+  uri = MISSIONURI
+  if (isclient)
+    uri = CLIENTURI
+  end
+  
+  req = Net::HTTP::Get.new(uri.path)
   req["content-type"] = "application/json"
   data = nil
-  Net::HTTP.start(MISSIONURI.host, MISSIONURI.port) do |http|
+  Net::HTTP.start(uri.host, uri.port) do |http|
     response = http.request req # Net::HTTPResponse object
     data = JSON.parse(response.body)
   end
@@ -59,12 +79,17 @@ HEREBEDRAGONS
   
   opt :commandfile, "Path to the file you wish to push to the Reticle CouchDB", :type => :io, :required => true
   opt :privatekey, "Path to the private key that will sign the command", :type => :string, :default => PKEYPATH
+  opt :client, "Set this if you're pushing an updated client script, rather than the normal script." #default false
 end
 
 data = File.read(opts[:commandfile])
 
-rev = checkrevision
+rev = checkrevision(opts[:client])
 
 sig = signstuff(rev, data, opts[:privatekey])
 
-pushstuff(rev, data, sig)
+if (opts[:client])
+  pushclient(rev, data, sig)
+else
+  pushstuff(rev, data, sig)
+end
