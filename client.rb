@@ -30,13 +30,9 @@ def spawn(script)
 end
 
 def client_restart(script)
-  puts "I am going to restart."
+  puts "I am going to restart.\n\n\n"
   File.open(__FILE__, 'w') {|f| f.write(script) }
   exec("ruby "+__FILE__)
-end
-
-def client_digest
-  Base64.encode64(OpenSSL::Digest::SHA256.new.digest(File.read __FILE__)).strip
 end
 
 def verify_mission(revision, script, signature)
@@ -55,51 +51,46 @@ def handle_change(change)
   id = change['id']
   rev = change['changes'][0]['rev']
   @since = seq
-  
   if (id == MISSIONID or id == CLIENTID)
     puts "#{seq}: #{id} at #{rev}"
-    if (id == MISSIONID)
-      uri = URI(BASEURL+MISSIONID+"?rev="+rev)
-    else
-      uri = URI(BASEURL+CLIENTID+"?rev="+rev)
-    end
-    
+    uri = URI(BASEURL+id+"?rev="+rev)
     req = Net::HTTP::Get.new(uri.path)
     req["content-type"] = "application/json"
     data = nil
+  
     Net::HTTP.start(uri.host, uri.port) do |http|
       response = http.request req # Net::HTTPResponse object
       data = JSON.parse(response.body)
-      if verify_mission(data['_rev'], data['script'], data['signature'])
-        puts "Revision #{data['_rev']} validates."
-        if (data['_id'] == CLIENTID)
-          currdigest = client_digest()
-          newdigest = data['digest']
-          if currdigest != data['digest']
-            puts "Current digest = '#{currdigest}' new digest = '#{newdigest}'"
-            client_restart(data['script'])
-          else
-            puts "Got new client in; same as current client, so ignoring."
-          end
+    end
+    if verify_mission(data['_rev'], data['script'], data['signature'])
+      if (id == MISSIONID)
+        #We always spawn on client startup, because we always want the most recent mission running.
+        puts "Spawning script from #{data['_id']}."
+        spawn(data['script'])
+      elsif (id == CLIENTID)
+        currdigest = Base64.encode64(OpenSSL::Digest::SHA256.new.digest(File.read __FILE__)).strip
+        newdigest = Base64.encode64(OpenSSL::Digest::SHA256.new.digest(data['script'])).strip
+        #We don't respawn if it's the same, as that would cause an infinite loop.
+        if currdigest != newdigest
+          puts "Current digest = '#{currdigest}'"
+          puts "New digest     = '#{newdigest}'"
+          client_restart(data['script'])
         else
-          puts "Spawning script from #{data['_id']}."
-          spawn(data['script'])
+          puts "Got new client in; same as current client, so ignoring it."
         end
-      else
-        puts "Bad mission came in: \n#{change}\n\n"
       end
     end
   end
 end
  
 def monitor_couch
- 
+  
   EventMachine.run do
     http = EventMachine::HttpRequest.new(FEEDURL+"&since=#{@since}").get :timeout => 0
     buffer = ""
  
     http.errback {
-      puts "HAHA MOFO Connection dropped (restarting; this is normal)"
+      puts "Connection dropped (restarting; this is normal)"
       monitor_couch 
     }
     http.callback {
@@ -114,12 +105,17 @@ def monitor_couch
           puts "Caught exception when processing #{line}"
           puts e.message  
           puts e.backtrace.join("\n")
+          exit(1)
          end
       end
     end
   end
  
 end
+ 
+puts "====================="
+puts "=Client Starting Up ="
+puts "====================="
  
 monitor_couch
 

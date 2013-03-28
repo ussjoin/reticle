@@ -25,24 +25,18 @@ def signstuff(revision, data, pkeypath)
   signature = Base64.encode64(pkey.sign(digest, newrev.to_s+data))
 end
 
-def pushstuff(rev, data, signature)
+def pushstuff(rev, data, signature, client=false)
   json = JSON.generate({"script" => data, "signature" => signature, "_rev" => rev})
-  req = Net::HTTP::Put.new(MISSIONURI.path)
-  req["content-type"] = "application/json"
-  req.body = json
-  Net::HTTP.start(MISSIONURI.host, MISSIONURI.port) do |http|
-    response = http.request req # Net::HTTPResponse object
-    puts response.body
+  uri = nil
+  if (client)
+    uri = CLIENTURI
+  else
+    uri = MISSIONURI
   end
-end
-
-def pushclient(rev, data, signature)
-  json = JSON.generate({"script" => data, "signature" => signature, "_rev" => rev,
-    "digest" => Base64.encode64(OpenSSL::Digest::SHA256.new.digest(data)).strip})
-  req = Net::HTTP::Put.new(CLIENTURI.path)
+  req = Net::HTTP::Put.new(uri.path)
   req["content-type"] = "application/json"
   req.body = json
-  Net::HTTP.start(CLIENTURI.host, CLIENTURI.port) do |http|
+  Net::HTTP.start(uri.host, uri.port) do |http|
     response = http.request req # Net::HTTPResponse object
     puts response.body
   end
@@ -88,8 +82,5 @@ rev = checkrevision(opts[:client])
 
 sig = signstuff(rev, data, opts[:privatekey])
 
-if (opts[:client])
-  pushclient(rev, data, sig)
-else
-  pushstuff(rev, data, sig)
-end
+pushstuff(rev, data, sig, opts[:client])
+
