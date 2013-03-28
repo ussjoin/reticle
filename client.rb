@@ -14,7 +14,19 @@ MISSIONID = "mission"
 #This is the CA's public key, used to verify missions.
 CERTPATH = File.dirname(__FILE__)+"/certs/ca.pem"
 
+MISSIONPATH = File.dirname(__FILE__)+"/working/client/mission.rb"
+
+@runningthread = nil
+
 @since = 0
+
+def spawn(script)
+  if (@runningthread)
+    @runningthread.kill
+  end
+  File.open(MISSIONPATH, 'w') {|f| f.write(script) }
+  @runningthread = Thread.new {system("ruby "+MISSIONPATH)}
+end
 
 def verify_mission(revision, script, signature)
   digest = OpenSSL::Digest::SHA256.new
@@ -44,6 +56,7 @@ def handle_change(change)
       data = JSON.parse(response.body)
       if verify_mission(data['_rev'], data['script'], data['signature'])
         puts "Revision #{data['_rev']} validates."
+        spawn(data['script'])
       else
         puts "Bad mission came in: \n#{change}\n\n"
       end
