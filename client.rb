@@ -13,9 +13,13 @@ MISSIONID = "mission"
 CLIENTID = "client"
 
 #This is the CA's public key, used to verify missions.
-CERTPATH = File.dirname(__FILE__)+"/certs/ca.pem"
+CACERTPATH = File.dirname(__FILE__)+"/certs/ca.pem"
+
+MYCERTPATH = File.dirname(__FILE__)+"/certs/my.pem"
+MYKEYPATH = File.dirname(__FILE__)+"/certs/my.key"
 
 MISSIONPATH = File.dirname(__FILE__)+"/working/client/mission.rb"
+ONIONPATH = File.dirname(__FILE__)+"/working/tor/hidden/hostname"
 
 @runningthread = nil
 
@@ -37,7 +41,7 @@ end
 
 def verify_mission(revision, script, signature)
   digest = OpenSSL::Digest::SHA256.new
-  cert = OpenSSL::X509::Certificate.new File.read CERTPATH
+  cert = OpenSSL::X509::Certificate.new File.read CACERTPATH
   pkey = OpenSSL::PKey::RSA.new cert.public_key
   
   revm = revision.match(/([0-9]+)-.+/)
@@ -82,6 +86,79 @@ def handle_change(change)
     end
   end
 end
+
+
+#BaseURL: of the form "http://hostname.onion:40120/reticle/"
+def insert_my_node_document(baseurl)
+  #Node document has the following fields:
+  #cert - My PEM certificate
+  #address - My .onion address
+  #signature - signature over (rev+address+cert), signed by the cert in cert
+  
+  puts "Asked to insert my ID document to #{baseurl}"
+  
+  digest = OpenSSL::Digest::SHA256.new
+  
+  cert = File.read MYCERTPATH
+  address = File.read ONIONPATH
+  cert.strip!
+  address.strip!
+  
+  uri = URI(baseurl+"node_#{address}")
+  
+  req = Net::HTTP::Get.new(uri.path)
+  req["content-type"] = "application/json"
+  data = nil
+  Net::HTTP.start(uri.host, uri.port) do |http|
+    response = http.request req # Net::HTTPResponse object
+    data = JSON.parse(response.body)
+  end
+  newrev = 1
+  currentrevision = data['_rev']
+  if currentrevision
+    revm = data['_rev'].match(/([0-9]+)-.+/)
+    oldrev = revm[1]
+    
+    #Wait... if _rev is here, is the whole document valid?
+    #Check it, and if so, just return immediately.
+    
+    a = data['address']
+    c = data['cert']
+    s = data['signature']
+    pubkey = OpenSSL::PKey::RSA.new (OpenSSL::X509::Certificate.new cert).public_key
+    if (pubkey.verify(digest, Base64.decode64(s), oldrev+a+c) and a == address and c == cert)
+      puts "Was asked to insert my ID to #{baseurl}, but it already had mine!"
+      return
+    end
+    
+    #Well, guess that didn't work.
+    newrev = oldrev.to_i + 1
+  end
+  
+  
+  pkey = OpenSSL::PKey::RSA.new File.read MYKEYPATH
+  signature = Base64.encode64(pkey.sign(digest, newrev.to_s+address+cert)).strip
+  
+  data = {"cert" => cert, "address" => address, "signature" => signature}
+  
+  if (currentrevision)
+    #This allows us to push on top of old data.
+    data["_rev"] = currentrevision
+  end
+  
+  json = JSON.generate(data)
+
+  req = Net::HTTP::Put.new(uri.path)
+  req["content-type"] = "application/json"
+  req.body = json
+  Net::HTTP.start(uri.host, uri.port) do |http|
+    response = http.request req # Net::HTTPResponse object
+    puts "Response to inserting ID document at #{baseurl}: #{response.body}"
+  end
+  
+  
+end
+
  
 def monitor_couch
   
@@ -116,5 +193,6 @@ puts "====================="
 puts "=Client Starting Up ="
 puts "====================="
  
-monitor_couch
-
+mainthread = Thread.new {monitor_couch}
+insert_my_node_document("http://localhost:50121/reticle/")
+mainthread.join
