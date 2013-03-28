@@ -105,7 +105,6 @@ def monitor_couch
           puts "Caught exception when processing #{line}"
           puts e.message  
           puts e.backtrace.join("\n")
-          exit(1)
          end
       end
     end
