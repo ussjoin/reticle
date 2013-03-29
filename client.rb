@@ -15,6 +15,8 @@ CLIENTID = "client"
 VIEWURL = BASEURL+"_design/utilities/"
 NODEVIEWURL = VIEWURL+"_view/nodes"
 
+REPLICATORURL = 'http://localhost:50121/_replicator/'
+
 #This is the CA's public key, used to verify missions.
 CACERTPATH = File.dirname(__FILE__)+"/certs/ca.pem"
 
@@ -164,7 +166,63 @@ end
 #Looks through the database for other nodes we've heard of, 
 #and checks that they have running replications.
 def check_for_replications
+  uri = URI(NODEVIEWURL)
+  req = Net::HTTP::Get.new(uri.path)
+  req["content-type"] = "application/json"
+  data = nil
+  Net::HTTP.start(uri.host, uri.port) do |http|
+    response = http.request req # Net::HTTPResponse object
+    data = JSON.parse(response.body)
+  end
   
+  data['rows'].each do |node|
+    d = node['value']
+    puts "My address: #{@myaddress} Considering: #{d['address']}"
+    if (d['address'] == @myaddress)
+      #This is me-- don't try to replicate to myself, it'd be dumb.
+      puts "Won't replicate to myself."
+      next
+    else
+      puts "Proceeding with replication."
+    end
+    
+    #signature over (rev+address+cert)
+    digest = OpenSSL::Digest::SHA256.new
+    a = d['address']
+    c = d['cert']
+    s = d['signature']
+    revm = d['_rev'].match(/([0-9]+)-.+/)
+    rev = revm[1]
+    pubkey = OpenSSL::PKey::RSA.new (OpenSSL::X509::Certificate.new c).public_key
+    if pubkey.verify(digest, Base64.decode64(s), rev+a+c)
+      #Then we've got a valid ID document.
+      puts "Replications: Found valid ID document for #{a}"
+      
+      #Now do two things: 1) Push my ID doc to it, and 2) Make sure a replication is running *from* it.
+      
+      #BaseURL: of the form "http://hostname.onion:40120/reticle/"
+      
+      remoteaddress = "http://#{a}:40120/reticle/"
+      insert_my_node_document(remoteaddress)
+      
+      repdata = JSON.generate({
+        "_id" => "rep_#{a}",
+        "source" => remoteaddress,
+        "continuous" => true,
+        "target" => "reticle"
+      })
+      
+      uri = URI(REPLICATORURL)
+      req = Net::HTTP::Put.new(uri.path)
+      req["content-type"] = "application/json"
+      req.body = repdata
+      Net::HTTP.start(uri.host, uri.port) do |http|
+        response = http.request req # Net::HTTPResponse object
+        puts "Response to inserting replication document at #{baseurl}: #{response.body}"
+      end
+    end
+    
+  end
 end
 
 #Checks to see if the DB exists; if not, creates it.
@@ -278,7 +336,6 @@ def monitor_couch
       end
     end
   end
- 
 end
  
 puts "====================="
@@ -291,4 +348,11 @@ mainthread = Thread.new {monitor_couch}
 @myaddress = File.read ONIONPATH
 @myaddress.strip!
 insert_my_node_document(BASEURL)
+
+secondthread = Thread.new {
+  sleep 5
+  check_for_replications
+  sleep 60
+}
+
 mainthread.join
