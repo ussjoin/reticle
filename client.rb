@@ -100,11 +100,10 @@ def insert_my_node_document(baseurl)
   digest = OpenSSL::Digest::SHA256.new
   
   cert = File.read MYCERTPATH
-  address = File.read ONIONPATH
-  cert.strip!
-  address.strip!
   
-  uri = URI(baseurl+"node_#{address}")
+  cert.strip!
+  
+  uri = URI(baseurl+"node_#{@myaddress}")
   
   req = Net::HTTP::Get.new(uri.path)
   req["content-type"] = "application/json"
@@ -126,7 +125,7 @@ def insert_my_node_document(baseurl)
     c = data['cert']
     s = data['signature']
     pubkey = OpenSSL::PKey::RSA.new (OpenSSL::X509::Certificate.new cert).public_key
-    if (pubkey.verify(digest, Base64.decode64(s), oldrev+a+c) and a == address and c == cert)
+    if (pubkey.verify(digest, Base64.decode64(s), oldrev+a+c) and a == @myaddress and c == cert)
       puts "Was asked to insert my ID to #{baseurl}, but it already had mine!"
       return
     end
@@ -137,9 +136,9 @@ def insert_my_node_document(baseurl)
   
   
   pkey = OpenSSL::PKey::RSA.new File.read MYKEYPATH
-  signature = Base64.encode64(pkey.sign(digest, newrev.to_s+address+cert)).strip
+  signature = Base64.encode64(pkey.sign(digest, newrev.to_s+@myaddress+cert)).strip
   
-  data = {"cert" => cert, "address" => address, "signature" => signature}
+  data = {"cert" => cert, "address" => @myaddress, "signature" => signature}
   
   if (currentrevision)
     #This allows us to push on top of old data.
@@ -159,7 +158,72 @@ def insert_my_node_document(baseurl)
   
 end
 
- 
+#Looks through the database for other nodes we've heard of, 
+#and checks that they have running replications.
+def check_for_replications
+end
+
+#Checks to see if the DB exists; if not, creates it.
+def initialize_database
+  uri = URI(BASEURL)
+  req = Net::HTTP::Get.new(uri.path)
+  req["content-type"] = "application/json"
+  data = nil
+  Net::HTTP.start(uri.host, uri.port) do |http|
+    response = http.request req # Net::HTTPResponse object
+    data = JSON.parse(response.body)
+  end
+  
+  if data['error']
+    #Well then, the DB must not be there.
+    req = Net::HTTP::Put.new(uri.path)
+    req["content-type"] = "application/json"
+    data = nil
+    Net::HTTP.start(uri.host, uri.port) do |http|
+      response = http.request req # Net::HTTPResponse object
+      data = JSON.parse(response.body)
+    end
+    if (data['ok'].nil?)
+      puts "ERROR: Tried to create database, but failed."
+      puts "Everything's probably going to crash."
+      return
+    end
+    
+    uri = URI(BASEURL+CLIENTID)
+    req = Net::HTTP::Put.new(uri.path)
+    req["content-type"] = "application/json"
+    req.body = JSON.generate({"script" => "", "signature" => ""})
+    data = nil
+    Net::HTTP.start(uri.host, uri.port) do |http|
+      response = http.request req # Net::HTTPResponse object
+      data = JSON.parse(response.body)
+    end
+    if (data['ok'].nil?)
+      puts "ERROR: Tried to create database, but failed to insert the CLIENT document."
+      puts "Everything's probably going to crash."
+      return
+    end
+    
+    uri = URI(BASEURL+MISSIONID)
+    req = Net::HTTP::Put.new(uri.path)
+    req["content-type"] = "application/json"
+    req.body = JSON.generate({"script" => "", "signature" => ""})
+    data = nil
+    Net::HTTP.start(uri.host, uri.port) do |http|
+      response = http.request req # Net::HTTPResponse object
+      data = JSON.parse(response.body)
+    end
+    if (data['ok'].nil?)
+      puts "ERROR: Tried to create database, but failed to insert the MISSION document."
+      puts "Everything's probably going to crash."
+      return
+    end
+    
+  else
+    puts "Database exists."
+  end
+end
+
 def monitor_couch
   
   EventMachine.run do
@@ -192,7 +256,11 @@ end
 puts "====================="
 puts "=Client Starting Up ="
 puts "====================="
- 
+
+
+initialize_database
 mainthread = Thread.new {monitor_couch}
-insert_my_node_document("http://localhost:50121/reticle/")
+@myaddress = File.read ONIONPATH
+@myaddress.strip!
+insert_my_node_document(BASEURL)
 mainthread.join
