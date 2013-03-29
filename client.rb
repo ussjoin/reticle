@@ -12,6 +12,9 @@ FEEDURL = BASEURL+'_changes?feed=continuous'
 MISSIONID = "mission"
 CLIENTID = "client"
 
+VIEWURL = BASEURL+"_design/utilities/"
+NODEVIEWURL = VIEWURL+"_view/nodes"
+
 #This is the CA's public key, used to verify missions.
 CACERTPATH = File.dirname(__FILE__)+"/certs/ca.pem"
 
@@ -161,6 +164,7 @@ end
 #Looks through the database for other nodes we've heard of, 
 #and checks that they have running replications.
 def check_for_replications
+  
 end
 
 #Checks to see if the DB exists; if not, creates it.
@@ -208,6 +212,30 @@ def initialize_database
     req = Net::HTTP::Put.new(uri.path)
     req["content-type"] = "application/json"
     req.body = JSON.generate({"script" => "", "signature" => ""})
+    data = nil
+    Net::HTTP.start(uri.host, uri.port) do |http|
+      response = http.request req # Net::HTTPResponse object
+      data = JSON.parse(response.body)
+    end
+    if (data['ok'].nil?)
+      puts "ERROR: Tried to create database, but failed to insert the MISSION document."
+      puts "Everything's probably going to crash."
+      return
+    end
+    
+    uri = URI(VIEWURL)
+    req = Net::HTTP::Put.new(uri.path)
+    req["content-type"] = "application/json"
+    req.body = JSON.generate({"language" => "javascript", "views" => {
+      "nodes" => {
+        "map" => "function(doc){
+          if (doc._id.match(/^node\_/))
+          {
+            emit(doc._id, doc);
+          }
+        }"
+      }
+    }})
     data = nil
     Net::HTTP.start(uri.host, uri.port) do |http|
       response = http.request req # Net::HTTPResponse object
