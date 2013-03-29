@@ -200,10 +200,14 @@ def check_for_replications
       
       #Now do two things: 1) Push my ID doc to it, and 2) Make sure a replication is running *from* it.
       
-      #BaseURL: of the form "http://hostname.onion:40120/reticle/"
+      #BaseURL: of the form "http://hostname.onion:34214/reticle/"
       
-      remoteaddress = "http://#{a}:40120/reticle/"
+      remoteaddress = "http://#{a}:34214/reticle/"
+      
       insert_my_node_document(remoteaddress)
+      
+      
+      puts "Got here"
       
       repdata = JSON.generate({
         "_id" => "rep_#{a}",
@@ -218,8 +222,10 @@ def check_for_replications
       req.body = repdata
       Net::HTTP.start(uri.host, uri.port) do |http|
         response = http.request req # Net::HTTPResponse object
-        puts "Response to inserting replication document at #{baseurl}: #{response.body}"
+        puts "Response to inserting replication document for #{remoteaddress}: #{response.body}"
       end
+    else
+      puts "Replications: Invalid ID document for #{a}, disregarding."
     end
     
   end
@@ -350,9 +356,17 @@ mainthread = Thread.new {monitor_couch}
 insert_my_node_document(BASEURL)
 
 secondthread = Thread.new {
-  sleep 5
-  check_for_replications
-  sleep 60
+  while true
+    sleep 5
+    begin
+      check_for_replications
+    rescue Exception => e
+      puts e.message  
+      puts e.backtrace.join("\n")
+    end
+    sleep 15
+  end
 }
 
 mainthread.join
+secondthread.join

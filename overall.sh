@@ -18,6 +18,8 @@ shutdown()
     torshutdown
     PREFIX=$PREFIX; nginx -p $PREFIX/working/nginx/ -c $PREFIX/conf/nginx.conf -s quit
     PREFIX=$PREFIX; couchdb -d -n -a $PREFIX/conf/couchdb.ini -p $PREFIX/working/couchdb/couch.pid
+    mv /etc/resolv.conf.reticlemove /etc/resolv.conf
+    sudo iptables -t nat -D OUTPUT -p tcp -d 10.192.0.0/10 -j REDIRECT --to-ports 9040
     return $?
 }
  
@@ -52,6 +54,10 @@ startup()
     PREFIX=$PREFIX; nginx -p $PREFIX/working/nginx/ -c $PREFIX/conf/nginx.conf
 
     torstartup
+    
+    mv /etc/resolv.conf /etc/resolv.conf.reticlemove
+    echo "nameserver 127.0.0.1" > /etc/resolv.conf
+    sudo iptables -t nat -A OUTPUT -p tcp -d 10.192.0.0/10 -j REDIRECT --to-ports 9040
 }
 
 reset()

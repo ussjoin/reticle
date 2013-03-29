@@ -15,7 +15,8 @@ SocksBindAddress 127.0.0.1 # accept connections only from localhost
 VirtualAddrNetwork 10.192.0.0/10
 AutomapHostsOnResolve 1
 TransPort 9040
-DNSPort 2053
+DNSPort 53
+ServerDNSResolvConfFile /tmp/crypt/conf/resolv.conf
 
 ## Allow no-name routers (ones that the dirserver operators don't
 ## know anything about) in only these positions in your circuits.
@@ -31,10 +32,9 @@ AllowUnverifiedNodes middle,rendezvous
 ## Uncomment this to start the process in the background... or use
 ## --runasdaemon 1 on the command line.
 RunAsDaemon 1
-# User tor
-# Group tor
 
-# User pi
-# Group pi
+# User tor
+
+User pi
 
 
