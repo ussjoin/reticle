@@ -10,7 +10,7 @@ require 'base64'
 
 PIDPATH = File.dirname(__FILE__)+"/working/client/client.pid"
 
-BASEURL =  'http://localhost:50121/reticle/'
+BASEURL =  'http://127.0.0.1:50121/reticle/'
 FEEDURL = BASEURL+'_changes?feed=continuous'
 
 MISSIONID = "mission"
@@ -19,7 +19,7 @@ CLIENTID = "client"
 VIEWURL = BASEURL+"_design/utilities/"
 NODEVIEWURL = VIEWURL+"_view/nodes"
 
-REPLICATORURL = 'http://localhost:50121/_replicator/'
+REPLICATORURL = 'http://127.0.0.1:50121/_replicator/'
 
 #This is the CA's public key, used to verify missions.
 CACERTPATH = File.dirname(__FILE__)+"/certs/ca.pem"
