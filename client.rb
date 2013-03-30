@@ -31,8 +31,10 @@ MISSIONPATH = File.dirname(__FILE__)+"/working/client/mission.rb"
 ONIONPATH = File.dirname(__FILE__)+"/working/tor/hidden/hostname"
 
 @runningthread = nil
-
 @since = 0
+@myaddress = nil
+@mycert = nil
+@mykey = nil
 
 def spawn(script)
   if (@runningthread)
@@ -117,7 +119,11 @@ def insert_my_node_document(baseurl)
   req = Net::HTTP::Get.new(uri.path)
   req["content-type"] = "application/json"
   data = nil
-  Net::HTTP.start(uri.host, uri.port) do |http|
+  Net::HTTP.start(uri.host, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+    http.ca_file = CACERTPATH
+    http.cert = @mycert
+    http.key = @mykey
+    http.verify_mode = OpenSSL::SSL::VERIFY_PEER
     response = http.request req # Net::HTTPResponse object
     data = JSON.parse(response.body)
   end
@@ -159,7 +165,11 @@ def insert_my_node_document(baseurl)
   req = Net::HTTP::Put.new(uri.path)
   req["content-type"] = "application/json"
   req.body = json
-  Net::HTTP.start(uri.host, uri.port) do |http|
+  Net::HTTP.start(uri.host, uri.port, :use_ssl => uri.scheme == 'https') do |http|
+    http.ca_file = CACERTPATH
+    http.cert = @mycert
+    http.key = @mykey
+    http.verify_mode = OpenSSL::SSL::VERIFY_PEER
     response = http.request req # Net::HTTPResponse object
     puts "Response to inserting ID document at #{baseurl}: #{response.body}"
   end
@@ -206,7 +216,7 @@ def check_for_replications
       
       #BaseURL: of the form "http://hostname.onion:34214/reticle/"
       
-      remoteaddress = "http://#{a}:34214/reticle/"
+      remoteaddress = "https://#{a}:34214/reticle/"
       
       insert_my_node_document(remoteaddress)
       
@@ -373,6 +383,9 @@ puts "====================="
 
 #Write my PID to the assigned file, so the Overall script can read it
 File.open(PIDPATH, 'w') {|f| f.write(Process.pid) }
+
+@mycert = OpenSSL::X509::Certificate.new File.read MYCERTPATH
+@mykey = OpenSSL::PKey::RSA.new File.read MYKEYPATH
 
 initialize_database
 mainthread = Thread.new {monitor_couch}
