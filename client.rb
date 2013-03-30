@@ -240,7 +240,7 @@ def check_for_replications
         crepdata = JSON.parse(response.body)
       end
       
-      if crepdata['_replication_state'] == "triggered"
+      if (crepdata['_replication_state'] == "triggered") or (crepdata['_replication_state'].nil?)
         #Then we've got a valid, working replication already.
         puts "I already have a replication for #{remoteaddress}."
         next
