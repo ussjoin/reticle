@@ -209,14 +209,33 @@ def check_for_replications
       
       puts "Got here"
       
+      uri = URI(REPLICATORURL+"rep_#{a}")
+      req = Net::HTTP::Get.new(uri.path)
+      req["content-type"] = "application/json"
+      crepdata = nil
+      Net::HTTP.start(uri.host, uri.port) do |http|
+        response = http.request req # Net::HTTPResponse object
+        crepdata = JSON.parse(response.body)
+      end
+      
+      if crepdata['_replication_state'] == "triggered"
+        #Then we've got a valid, working replication already.
+        puts "I already have a replication for #{remoteaddress}."
+        next
+      end
+      
       repdata = JSON.generate({
-        "_id" => "rep_#{a}",
         "source" => remoteaddress,
         "continuous" => true,
         "target" => "reticle"
       })
       
-      uri = URI(REPLICATORURL)
+      if crepdata['_rev'] #And, importantly, if we're still here...
+        #This means that the replication isn't working.
+        repdata['_rev'] = crepdata['_rev'] #Make it rewrite correctly
+      end
+      
+      uri = URI(REPLICATORURL+"rep_#{a}")
       req = Net::HTTP::Put.new(uri.path)
       req["content-type"] = "application/json"
       req.body = repdata
