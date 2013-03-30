@@ -100,7 +100,8 @@ end
 
 
 #BaseURL: of the form "http://hostname.onion:40120/reticle/"
-def insert_my_node_document(baseurl)
+#remote_certificate: an OpenSSL::X509::Certificate containing the certificate of who we think we're gonna talk to.
+def insert_my_node_document(baseurl, remote_certificate)
   #Node document has the following fields:
   #cert - My PEM certificate
   #address - My .onion address
@@ -119,11 +120,15 @@ def insert_my_node_document(baseurl)
   req = Net::HTTP::Get.new(uri.path)
   req["content-type"] = "application/json"
   data = nil
-  Net::HTTP.start(uri.host, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-    http.ca_file = CACERTPATH
-    http.cert = @mycert
-    http.key = @mykey
-    http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+  Net::HTTP.start(uri.host, uri.port, :use_ssl => uri.scheme == 'https',
+      :ca_file => CACERTPATH, 
+      :cert => @mycert,
+      :key => @mykey,
+      :verify_mode => OpenSSL::SSL::VERIFY_NONE,
+      :verify_callback => proc do |p, c| 
+        remote_certificate.public_key.to_s.strip == c.current_cert.public_key.to_s.strip
+      end,
+      :ssl_version => :TLSv1) do |http|
     response = http.request req # Net::HTTPResponse object
     data = JSON.parse(response.body)
   end
@@ -165,11 +170,16 @@ def insert_my_node_document(baseurl)
   req = Net::HTTP::Put.new(uri.path)
   req["content-type"] = "application/json"
   req.body = json
-  Net::HTTP.start(uri.host, uri.port, :use_ssl => uri.scheme == 'https') do |http|
-    http.ca_file = CACERTPATH
-    http.cert = @mycert
-    http.key = @mykey
-    http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+  Net::HTTP.start(uri.host, uri.port, :use_ssl => uri.scheme == 'https',
+      :ca_file => CACERTPATH, 
+      :cert => @mycert,
+      :key => @mykey,
+      :verify_mode => OpenSSL::SSL::VERIFY_NONE,
+      :verify_callback => proc do |p, c| 
+        remote_certificate.public_key.to_s.strip == c.current_cert.public_key.to_s.strip
+      end,
+      :ssl_version => :TLSv1) do |http|
+  
     response = http.request req # Net::HTTPResponse object
     puts "Response to inserting ID document at #{baseurl}: #{response.body}"
   end
@@ -207,7 +217,8 @@ def check_for_replications
     s = d['signature']
     revm = d['_rev'].match(/([0-9]+)-.+/)
     rev = revm[1]
-    pubkey = OpenSSL::PKey::RSA.new (OpenSSL::X509::Certificate.new c).public_key
+    remote_certificate = OpenSSL::X509::Certificate.new c
+    pubkey = OpenSSL::PKey::RSA.new (remote_certificate.public_key)
     if pubkey.verify(digest, Base64.decode64(s), rev+a+c)
       #Then we've got a valid ID document.
       puts "Replications: Found valid ID document for #{a}"
@@ -218,10 +229,7 @@ def check_for_replications
       
       remoteaddress = "https://#{a}:34214/reticle/"
       
-      insert_my_node_document(remoteaddress)
-      
-      
-      puts "Got here"
+      insert_my_node_document(remoteaddress, remote_certificate)
       
       uri = URI(REPLICATORURL+"rep_#{a}")
       req = Net::HTTP::Get.new(uri.path)
@@ -238,11 +246,11 @@ def check_for_replications
         next
       end
       
-      repdata = JSON.generate({
+      repdata = {
         "source" => remoteaddress,
         "continuous" => true,
         "target" => "reticle"
-      })
+      }
       
       if crepdata['_rev'] #And, importantly, if we're still here...
         #This means that the replication isn't working.
@@ -252,7 +260,7 @@ def check_for_replications
       uri = URI(REPLICATORURL+"rep_#{a}")
       req = Net::HTTP::Put.new(uri.path)
       req["content-type"] = "application/json"
-      req.body = repdata
+      req.body = JSON.generate(repdata)
       Net::HTTP.start(uri.host, uri.port) do |http|
         response = http.request req # Net::HTTPResponse object
         puts "Response to inserting replication document for #{remoteaddress}: #{response.body}"
@@ -399,7 +407,7 @@ initialize_database
 mainthread = Thread.new {monitor_couch}
 @myaddress = File.read ONIONPATH
 @myaddress.strip!
-insert_my_node_document(BASEURL)
+insert_my_node_document(BASEURL, @mycert)
 
 secondthread = Thread.new {
   while true
