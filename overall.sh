@@ -11,11 +11,15 @@ torstartup()
 {
     #-f: Use this configuration file
     PREFIX=$PREFIX; tor -f $PREFIX/conf/torrc
+    
+    mv /etc/resolv.conf /etc/resolv.conf.reticlemove
+    echo "nameserver 127.0.0.1" > /etc/resolv.conf
 }
  
 shutdown()
 {
     torshutdown
+    kill -s SIGINT `cat $PREFIX/working/client/client.pid`
     PREFIX=$PREFIX; nginx -p $PREFIX/working/nginx/ -c $PREFIX/conf/nginx.conf -s quit
     PREFIX=$PREFIX; couchdb -d -n -a $PREFIX/conf/couchdb.ini -p $PREFIX/working/couchdb/couch.pid
     mv /etc/resolv.conf.reticlemove /etc/resolv.conf
@@ -55,8 +59,8 @@ startup()
 
     torstartup
     
-    mv /etc/resolv.conf /etc/resolv.conf.reticlemove
-    echo "nameserver 127.0.0.1" > /etc/resolv.conf
+    $PREFIX/client.rb
+    
     sudo iptables -t nat -A OUTPUT -p tcp -d 10.192.0.0/10 -j REDIRECT --to-ports 9040
 }
 

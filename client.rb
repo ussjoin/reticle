@@ -1,3 +1,5 @@
+#!/usr/bin/ruby
+
 require 'rubygems'
 require 'eventmachine'
 require 'em-http'
@@ -5,7 +7,9 @@ require 'json'
 require 'net/http'
 require 'openssl'
 require 'base64'
- 
+
+PIDPATH = File.dirname(__FILE__)+"/working/client/client.pid"
+
 BASEURL =  'http://localhost:50121/reticle/'
 FEEDURL = BASEURL+'_changes?feed=continuous'
 
@@ -367,6 +371,8 @@ puts "====================="
 puts "=Client Starting Up ="
 puts "====================="
 
+#Write my PID to the assigned file, so the Overall script can read it
+File.open(PIDPATH, 'w') {|f| f.write(Process.pid) }
 
 initialize_database
 mainthread = Thread.new {monitor_couch}
