@@ -267,14 +267,22 @@ end
 #Checks to see if the DB exists; if not, creates it.
 def initialize_database
   uri = URI(BASEURL)
-  req = Net::HTTP::Get.new(uri.path)
-  req["content-type"] = "application/json"
   data = nil
-  Net::HTTP.start(uri.host, uri.port) do |http|
-    response = http.request req # Net::HTTPResponse object
-    data = JSON.parse(response.body)
+  while data.nil?
+    begin
+      req = Net::HTTP::Get.new(uri.path)
+      req["content-type"] = "application/json"
+      puts "OK, going to try connecting to #{uri.host} : #{uri.port}"
+      Net::HTTP.start(uri.host, uri.port) do |http|
+        response = http.request req # Net::HTTPResponse object
+        data = JSON.parse(response.body)
+      end
+    rescue Exception => e
+      puts "Trying to connect to local database didn't work; I'll wait 2 seconds, then try again."
+      sleep 2
+    end
   end
-  
+
   if data['error']
     #Well then, the DB must not be there.
     req = Net::HTTP::Put.new(uri.path)
