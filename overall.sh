@@ -59,9 +59,10 @@ startup()
 
     torstartup
     
+    sudo iptables -t nat -A OUTPUT -p tcp -d 10.192.0.0/10 -j REDIRECT --to-ports 9040
+    
     $PREFIX/client.rb
     
-    sudo iptables -t nat -A OUTPUT -p tcp -d 10.192.0.0/10 -j REDIRECT --to-ports 9040
 }
 
 reset()
