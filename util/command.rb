@@ -6,7 +6,7 @@ require 'base64'
 require 'net/http'
 
 PKEYPATH = File.dirname(__FILE__)+"/../certs/ca.key"
-BASEURL = "http://localhost:50121/reticle/"
+BASEURL = "http://127.0.0.1:50121/reticle/"
 MISSIONURI = URI(BASEURL+"mission")
 CLIENTURI = URI(BASEURL+"client")
 

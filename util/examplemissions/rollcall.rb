@@ -7,7 +7,7 @@ require 'base64'
 #Remember: we're at ./working/client/something.rb
 CERTPATH = File.dirname(__FILE__)+"/../../certs/my.pem"
 TORPATH = File.dirname(__FILE__)+"/../../working/tor/hidden/hostname"
-RETICLEURL = "http://localhost:50121/reticle/"
+RETICLEURL = "http://127.0.0.1:50121/reticle/"
 
 torname = File.read TORPATH
 torname.strip!
