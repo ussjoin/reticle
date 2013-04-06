@@ -200,75 +200,83 @@ def check_for_replications
   end
   
   data['rows'].each do |node|
-    d = node['value']
-    puts "My address: #{@myaddress} Considering: #{d['address']}"
-    if (d['address'] == @myaddress)
-      #This is me-- don't try to replicate to myself, it'd be dumb.
-      puts "Won't replicate to myself."
-      next
-    else
-      puts "Proceeding with replication."
-    end
-    
-    #signature over (rev+address+cert)
-    digest = OpenSSL::Digest::SHA256.new
-    a = d['address']
-    c = d['cert']
-    s = d['signature']
-    revm = d['_rev'].match(/([0-9]+)-.+/)
-    rev = revm[1]
-    remote_certificate = OpenSSL::X509::Certificate.new c
-    pubkey = OpenSSL::PKey::RSA.new (remote_certificate.public_key)
-    if pubkey.verify(digest, Base64.decode64(s), rev+a+c)
-      #Then we've got a valid ID document.
-      puts "Replications: Found valid ID document for #{a}"
-      
-      #Now do two things: 1) Push my ID doc to it, and 2) Make sure a replication is running *from* it.
-      
-      #BaseURL: of the form "http://hostname.onion:34214/reticle/"
-      
-      remoteaddress = "https://#{a}:34214/reticle/"
-      
-      insert_my_node_document(remoteaddress, remote_certificate)
-      
-      uri = URI(REPLICATORURL+"rep_#{a}")
-      req = Net::HTTP::Get.new(uri.path)
-      req["content-type"] = "application/json"
-      crepdata = nil
-      Net::HTTP.start(uri.host, uri.port) do |http|
-        response = http.request req # Net::HTTPResponse object
-        crepdata = JSON.parse(response.body)
-      end
-      
-      if (crepdata['_replication_state'] == "triggered") or (crepdata['_replication_state'].nil?)
-        #Then we've got a valid, working replication already.
-        puts "I already have a replication for #{remoteaddress}."
+    begin
+      d = node['value']
+      puts "My address: #{@myaddress} Considering: #{d['address']}"
+      if (d['address'] == @myaddress)
+        #This is me-- don't try to replicate to myself, it'd be dumb.
+        puts "Won't replicate to myself."
         next
+      else
+        puts "Proceeding with replication."
       end
-      
-      repdata = {
-        "source" => remoteaddress,
-        "continuous" => true,
-        "target" => "reticle"
-      }
-      
-      if crepdata['_rev'] #And, importantly, if we're still here...
-        #This means that the replication isn't working.
-        repdata['_rev'] = crepdata['_rev'] #Make it rewrite correctly
-      end
-      
-      uri = URI(REPLICATORURL+"rep_#{a}")
-      req = Net::HTTP::Put.new(uri.path)
-      req["content-type"] = "application/json"
-      req.body = JSON.generate(repdata)
-      Net::HTTP.start(uri.host, uri.port) do |http|
-        response = http.request req # Net::HTTPResponse object
-        puts "Response to inserting replication document for #{remoteaddress}: #{response.body}"
-      end
-    else
-      puts "Replications: Invalid ID document for #{a}, disregarding."
-    end
     
+      #signature over (rev+address+cert)
+      digest = OpenSSL::Digest::SHA256.new
+      a = d['address']
+      c = d['cert']
+      s = d['signature']
+      revm = d['_rev'].match(/([0-9]+)-.+/)
+      rev = revm[1]
+      remote_certificate = OpenSSL::X509::Certificate.new c
+      pubkey = OpenSSL::PKey::RSA.new (remote_certificate.public_key)
+      if pubkey.verify(digest, Base64.decode64(s), rev+a+c)
+        #Then we've got a valid ID document.
+        puts "Replications: Found valid ID document for #{a}"
+      
+        #Now do two things: 1) Push my ID doc to it, and 2) Make sure a replication is running *from* it.
+      
+        #BaseURL: of the form "http://hostname.onion:34214/reticle/"
+      
+        remoteaddress = "https://#{a}:34214/reticle/"
+      
+        insert_my_node_document(remoteaddress, remote_certificate)
+      
+        uri = URI(REPLICATORURL+"rep_#{a}")
+        req = Net::HTTP::Get.new(uri.path)
+        req["content-type"] = "application/json"
+        crepdata = nil
+        Net::HTTP.start(uri.host, uri.port) do |http|
+          response = http.request req # Net::HTTPResponse object
+          crepdata = JSON.parse(response.body)
+        end
+      
+        if (crepdata['_replication_state'] == "triggered") or (crepdata['_replication_state'].nil?)
+          #Then we've got a valid, working replication already.
+          puts "I already have a replication for #{remoteaddress}."
+          next
+        end
+      
+        repdata = {
+          "source" => remoteaddress,
+          "continuous" => true,
+          "target" => "reticle"
+        }
+      
+        if crepdata['_rev'] #And, importantly, if we're still here...
+          #This means that the replication isn't working.
+          repdata['_rev'] = crepdata['_rev'] #Make it rewrite correctly
+        end
+      
+        uri = URI(REPLICATORURL+"rep_#{a}")
+        req = Net::HTTP::Put.new(uri.path)
+        req["content-type"] = "application/json"
+        req.body = JSON.generate(repdata)
+        Net::HTTP.start(uri.host, uri.port) do |http|
+          response = http.request req # Net::HTTPResponse object
+          puts "Response to inserting replication document for #{remoteaddress}: #{response.body}"
+        end
+      else
+        puts "Replications: Invalid ID document for #{a}, disregarding."
+      end
+    rescue => e
+      #Have to use kernel.puts here... not entirely sure why, but otherwise I get the
+      #Error referenced in http://stackoverflow.com/questions/9911781/ruby-global-scope
+      puts "Was unable to do the replication to #{node['value']['address']} because:"
+      puts e.message  
+      puts e.backtrace.join("\n")
+    end
+    puts "At the bottom of the replication loop for #{node['value']['address']}"
   end
 end
 
@@ -285,7 +293,7 @@ def initialize_database
         response = http.request req # Net::HTTPResponse object
         data = JSON.parse(response.body)
       end
-    rescue Exception => e
+    rescue => e
       puts "Trying to connect to local database didn't work; I'll wait 2 seconds, then try again."
       sleep 2
     end
@@ -383,7 +391,7 @@ def monitor_couch
       while line = buffer.slice!(/.+\r?\n/)
         begin
           handle_change JSON.parse(line)
-        rescue Exception => e
+        rescue => e
           puts "Caught exception when processing #{line}"
           puts e.message  
           puts e.backtrace.join("\n")
@@ -414,7 +422,7 @@ secondthread = Thread.new {
     sleep 5
     begin
       check_for_replications
-    rescue Exception => e
+    rescue => e
       puts e.message  
       puts e.backtrace.join("\n")
     end
