@@ -1,0 +1,3 @@
+[submodule "portalsmash"]
+	path = portalsmash
+	url = https://github.com/ussjoin/portalsmash.git
