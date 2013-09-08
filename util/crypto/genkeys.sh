@@ -12,9 +12,8 @@ create_ca()
     echo "0001" > reticleCA/serial
     touch reticleCA/index.txt
     
-    openssl req -config openssl.cnf -x509 -nodes -days 3650 \
-        -newkey rsa:2048 -out reticleCA/certs/ca.pem \
-        -outform PEM -keyout ./reticleCA/private/ca.key
+    openssl ecparam -out ./reticleCA/private/ca.key -outform PEM -name prime256v1 -genkey
+    openssl req -config openssl.cnf -x509 -new -key ./reticleCA/private/ca.key -out ./reticleCA/certs/ca.pem -outform PEM -days 3650
 }
 
 if [ -z "$1" ]; then
@@ -40,15 +39,17 @@ do
     echo "** Now creating certificate $COUNTER."
     echo "***************************************"
     echo ""
-    
+
+    #Generate the key.
+    openssl ecparam -out nodeCerts/node_$COUNTER.key -outform PEM -name prime256v1 -genkey
+ 
     #Generate the CSR.
-    openssl req -config openssl.cnf -newkey rsa:2048 -nodes -sha1 \
-        -keyout nodeCerts/node_$COUNTER.key -keyform PEM -out nodeCerts/node_$COUNTER.req -outform PEM
-    
+    openssl req -config openssl.cnf -new -nodes -key nodeCerts/node_$COUNTER.key -outform PEM -out nodeCerts/node_$COUNTER.req
+ 
     #Sign the CSR.
-    openssl ca -config openssl.cnf -batch -notext \
-        -in nodeCerts/node_$COUNTER.req -out nodeCerts/node_$COUNTER.pem
-    
+    openssl ca -config openssl.cnf -batch -notext -keyfile ./reticleCA/private/ca.key \
+      -cert ./reticleCA/certs/ca.pem -in nodeCerts/node_$COUNTER.req -out nodeCerts/node_$COUNTER.pem
+
     #Delete the CSR, it's done now.
     rm nodeCerts/node_$COUNTER.req
     
