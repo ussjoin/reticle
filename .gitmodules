@@ -1,3 +1,6 @@
 [submodule "portalsmash"]
 	path = portalsmash
 	url = https://github.com/ussjoin/portalsmash.git
+[submodule "tor"]
+	path = tor
+	url = https://git.torproject.org/tor.git
