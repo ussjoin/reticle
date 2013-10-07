@@ -48,6 +48,12 @@ control_c()
 
 startup()
 {
+    # First: Make the directories, if necessary
+    mkdir -p $PREFIX/working/couchdb
+    mkdir -p $PREFIX/working/client
+    mkdir -p $PREFIX/working/nginx
+    mkdir -p $PREFIX/working/tor
+    
     #-b: Run in background
     #-n: Reset configuration chain (to get rid of /etc)
     #-a: Use this configuration file
