@@ -10,7 +10,7 @@ torshutdown()
 torstartup()
 {
     #-f: Use this configuration file
-    PREFIX=$PREFIX; tor -f $PREFIX/conf/torrc
+    PREFIX=$PREFIX; $PREFIX/tor/src/or/tor -f $PREFIX/conf/torrc
     
     check_resolv
 }
