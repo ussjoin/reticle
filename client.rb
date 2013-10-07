@@ -51,14 +51,24 @@ def client_restart(script)
 end
 
 def verify_mission(revision, script, signature)
-  digest = OpenSSL::Digest::SHA256.new
-  cert = OpenSSL::X509::Certificate.new File.read CACERTPATH
-  pkey = OpenSSL::PKey::RSA.new cert.public_key
+  begin
+    cert = OpenSSL::X509::Certificate.new File.read CACERTPATH
+    pkey = OpenSSL::PKey::EC.new cert.public_key
   
-  revm = revision.match(/([0-9]+)-.+/)
-  revnumber = revm[1]
+    revm = revision.match(/([0-9]+)-.+/)
+    revnumber = revm[1]
   
-  pkey.verify(digest, Base64.decode64(signature), revnumber+script)
+    puts "================"
+    puts "About to try to verify:"
+    puts "Item: #{revnumber+script}"
+    puts "Sig: #{signature}"
+    puts "================"
+  
+    pkey.dsa_verify_asn1(revnumber+script, Base64.decode64(signature))
+  rescue => e
+    puts "Verification failed. Returning false."
+    return false
+  end
 end
 
 def handle_change(change)
@@ -108,9 +118,7 @@ def insert_my_node_document(baseurl, remote_certificate)
   #signature - signature over (rev+address+cert), signed by the cert in cert
   
   puts "Asked to insert my ID document to #{baseurl}"
-  
-  digest = OpenSSL::Digest::SHA256.new
-  
+    
   cert = File.read MYCERTPATH
   
   cert.strip!
@@ -144,8 +152,8 @@ def insert_my_node_document(baseurl, remote_certificate)
     a = data['address']
     c = data['cert']
     s = data['signature']
-    pubkey = OpenSSL::PKey::RSA.new (OpenSSL::X509::Certificate.new cert).public_key
-    if (pubkey.verify(digest, Base64.decode64(s), oldrev+a+c) and a == @myaddress and c == cert)
+    pubkey = OpenSSL::PKey::EC.new (OpenSSL::X509::Certificate.new cert).public_key
+    if (pubkey.dsa_verify_asn1(oldrev+a+c, Base64.decode64(s)) and a == @myaddress and c == cert)
       puts "Was asked to insert my ID to #{baseurl}, but it already had mine!"
       return
     end
@@ -155,8 +163,8 @@ def insert_my_node_document(baseurl, remote_certificate)
   end
   
   
-  pkey = OpenSSL::PKey::RSA.new File.read MYKEYPATH
-  signature = Base64.encode64(pkey.sign(digest, newrev.to_s+@myaddress+cert)).strip
+  pkey = OpenSSL::PKey::EC.new File.read MYKEYPATH
+  signature = Base64.encode64(pkey.dsa_sign_asn1(newrev.to_s+@myaddress+cert)).strip
   
   data = {"cert" => cert, "address" => @myaddress, "signature" => signature}
   
@@ -212,15 +220,14 @@ def check_for_replications
       end
     
       #signature over (rev+address+cert)
-      digest = OpenSSL::Digest::SHA256.new
       a = d['address']
       c = d['cert']
       s = d['signature']
       revm = d['_rev'].match(/([0-9]+)-.+/)
       rev = revm[1]
       remote_certificate = OpenSSL::X509::Certificate.new c
-      pubkey = OpenSSL::PKey::RSA.new (remote_certificate.public_key)
-      if pubkey.verify(digest, Base64.decode64(s), rev+a+c)
+      pubkey = OpenSSL::PKey::EC.new (remote_certificate.public_key)
+      if pubkey.dsa_verify_asn1(Base64.decode64(s), rev+a+c)
         #Then we've got a valid ID document.
         puts "Replications: Found valid ID document for #{a}"
       
@@ -409,7 +416,7 @@ puts "====================="
 File.open(PIDPATH, 'w') {|f| f.write(Process.pid) }
 
 @mycert = OpenSSL::X509::Certificate.new File.read MYCERTPATH
-@mykey = OpenSSL::PKey::RSA.new File.read MYKEYPATH
+@mykey = OpenSSL::PKey::EC.new File.read MYKEYPATH
 
 initialize_database
 mainthread = Thread.new {monitor_couch}

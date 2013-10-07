@@ -15,14 +15,13 @@ CLIENTURI = URI(BASEURL+"client")
 # This is to prevent rollback attacks (by an attacker pushing an old script to stop a new script running).
 
 def signstuff(revision, data, pkeypath)
-  digest = OpenSSL::Digest::SHA256.new
-  pkey = OpenSSL::PKey::RSA.new File.read pkeypath
+  pkey = OpenSSL::PKey::EC.new File.read pkeypath
 
   revm = revision.match(/([0-9]+)-.+/)
   oldrev = revm[1]
   newrev = oldrev.to_i + 1
 
-  signature = Base64.encode64(pkey.sign(digest, newrev.to_s+data))
+  signature = Base64.encode64(pkey.dsa_sign_asn1(newrev.to_s+data))
 end
 
 def pushstuff(rev, data, signature, client=false)
