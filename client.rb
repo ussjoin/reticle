@@ -50,6 +50,19 @@ def client_restart(script)
   exec("ruby "+__FILE__)
 end
 
+def get_macs
+
+  ifcon = `ifconfig -a`
+
+  ans = []
+  lines = ifcon.split(/\n/)
+  lines.each do |l|
+    m = /wlan[0-9].+HWaddr\s([0-9a-f]{2}\:[0-9a-f]{2}\:[0-9a-f]{2}\:[0-9a-f]{2}\:[0-9a-f]{2}\:[0-9a-f]{2})/.match(l)
+    ans.push(m[1].gsub(/:/,'')) unless m == nil
+  end
+  ans
+end
+
 def verify_mission(revision, script, signature)
   begin
     cert = OpenSSL::X509::Certificate.new File.read CACERTPATH
@@ -166,7 +179,7 @@ def insert_my_node_document(baseurl, remote_certificate)
   pkey = OpenSSL::PKey::EC.new File.read MYKEYPATH
   signature = Base64.encode64(pkey.dsa_sign_asn1(newrev.to_s+@myaddress+cert)).strip
   
-  data = {"cert" => cert, "address" => @myaddress, "signature" => signature}
+  data = {"cert" => cert, "address" => @myaddress, "signature" => signature, "devices" => get_macs()}
   
   if (currentrevision)
     #This allows us to push on top of old data.
