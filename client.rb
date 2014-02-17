@@ -240,7 +240,7 @@ def check_for_replications
       rev = revm[1]
       remote_certificate = OpenSSL::X509::Certificate.new c
       pubkey = OpenSSL::PKey::EC.new (remote_certificate.public_key)
-      if pubkey.dsa_verify_asn1(Base64.decode64(s), rev+a+c)
+      if pubkey.dsa_verify_asn1(rev+a+c, Base64.decode64(s))
         #Then we've got a valid ID document.
         puts "Replications: Found valid ID document for #{a}"
       
