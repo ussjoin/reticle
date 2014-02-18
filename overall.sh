@@ -31,7 +31,7 @@ shutdown()
     torshutdown
     kill `cat $PREFIX/working/client/client.pid`
     PREFIX=$PREFIX; nginx -p $PREFIX/working/nginx/ -c $PREFIX/conf/nginx.conf -s quit
-    PREFIX=$PREFIX; couchdb -d -n -a $PREFIX/conf/couchdb.ini -p $PREFIX/working/couchdb/couch.pid
+    PREFIX=$PREFIX; /usr/local/bin/couchdb -d -n -a $PREFIX/conf/couchdb.ini -p $PREFIX/working/couchdb/couch.pid
     mv /etc/resolv.conf.reticlemove /etc/resolv.conf
     sudo iptables -t nat -D OUTPUT -p tcp -d 10.192.0.0/10 -j REDIRECT --to-ports 9040
     return $?
@@ -62,7 +62,7 @@ startup()
     #-o: Use this STDOUT file
     #-e: Use this STDERR file
 
-    PREFIX=$PREFIX; couchdb -b -n -a $PREFIX/conf/couchdb.ini \
+    PREFIX=$PREFIX; /usr/local/bin/couchdb -b -n -a $PREFIX/conf/couchdb.ini \
         -p $PREFIX/working/couchdb/couch.pid \
         -o $PREFIX/working/couchdb/couch.stdout \
         -e $PREFIX/working/couchdb/couch.stderr 
