@@ -145,6 +145,9 @@ def insert_my_node_document(baseurl, remote_certificate)
       :ca_file => CACERTPATH, 
       :cert => @mycert,
       :key => @mykey,
+      :read_timeout => 30,
+      :ssl_timeout => 30,
+      :open_timeout => 30,
       :verify_mode => OpenSSL::SSL::VERIFY_NONE,
       :verify_callback => proc do |p, c| 
         remote_certificate.public_key.to_s.strip == c.current_cert.public_key.to_s.strip
